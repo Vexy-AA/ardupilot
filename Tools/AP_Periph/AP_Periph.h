@@ -208,6 +208,10 @@ public:
     uint32_t baro_last_sample_ms[BARO_MAX_INSTANCES];
 #endif
 
+#if AP_FLOATER3V_ENABLED
+    AP_Floater3V floater;
+#endif
+
 #ifdef HAL_PERIPH_ENABLE_RPM
     AP_RPM rpm_sensor;
     uint32_t rpm_last_update_ms;
