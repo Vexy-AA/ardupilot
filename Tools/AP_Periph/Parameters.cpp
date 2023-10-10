@@ -246,6 +246,13 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     GOBJECT(compass,         "COMPASS_",     Compass),
 #endif
 
+#if AP_FLOATER3V_ENABLED
+    // Baro driver
+    // @Group: BARO
+    // @Path: ../libraries/AP_Baro/AP_Baro.cpp
+    GOBJECT(floater, "FLOT", AP_Floater3V),
+#endif
+
 #ifdef HAL_PERIPH_ENABLE_BARO
     // Baro driver
     // @Group: BARO
