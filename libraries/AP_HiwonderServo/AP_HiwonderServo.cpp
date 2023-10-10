@@ -39,9 +39,9 @@
 #if AP_HIWONDERSERVO_ENABLED
 
 #include <AP_HAL/AP_HAL.h>
+#include <SRV_Channel/SRV_Channel.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_SerialManager/AP_SerialManager.h>
-#include <SRV_Channel/SRV_Channel.h>
 #include "AP_HiwonderServo_Device.h"
 extern const AP_HAL::HAL& hal;
 
@@ -60,28 +60,28 @@ const AP_Param::GroupInfo AP_HiwonderServo::var_info[] = {
     // @Description: Position minimum at servo min value. This should be within the position control range of the servos, normally 0 to 4095
     // @Range: 0 4095
     // @User: Standard
-    AP_GROUPINFO("POSMIN",  1, AP_HiwonderServo, pos_min, 0),
+    AP_GROUPINFO("SRV1_FN",  1, AP_HiwonderServo, srv1Func, 0),
 
     // @Param: POSMAX
     // @DisplayName: Hiwonder servo position max
     // @Description: Position maximum at servo max value. This should be within the position control range of the servos, normally 0 to 4095
     // @Range: 0 4095
     // @User: Standard
-    AP_GROUPINFO("POSMAX",  2, AP_HiwonderServo, pos_max, 4095),
+    AP_GROUPINFO("SRV2_FN",  2, AP_HiwonderServo, srv2Func, 0),
     
     // @Param: POSMAX
     // @DisplayName: Hiwonder servo position max
     // @Description: Position maximum at servo max value. This should be within the position control range of the servos, normally 0 to 4095
     // @Range: 0 4095
     // @User: Standard
-    AP_GROUPINFO("SRV1_ID",  3, AP_HiwonderServo, srv1ID, HIWONDER_SRV_ID_DEFAULT),
+    AP_GROUPINFO("SRV1_ID",  3, AP_HiwonderServo, srv1Id, HIWONDER_SRV_ID_DEFAULT),
 
     // @Param: POSMAX
     // @DisplayName: Hiwonder servo position max
     // @Description: Position maximum at servo max value. This should be within the position control range of the servos, normally 0 to 4095
     // @Range: 0 4095
     // @User: Standard
-    AP_GROUPINFO("SRV2_ID",  4, AP_HiwonderServo, srv2ID, HIWONDER_SRV_ID_DEFAULT+1),
+    AP_GROUPINFO("SRV2_ID",  4, AP_HiwonderServo, srv2Id, HIWONDER_SRV_ID_DEFAULT+1),
     AP_GROUPEND
 };
 
@@ -97,8 +97,8 @@ AP_HiwonderServo::AP_HiwonderServo(void):
     }
     // set defaults from the parameter table
     
-    servo[0]->setId(srv1ID);
-    servo[1]->setId(srv2ID);
+    servo[0]->setId(srv1Id);
+    servo[1]->setId(srv2Id);
 }
 
 void AP_HiwonderServo::init(void)
@@ -111,10 +111,6 @@ void AP_HiwonderServo::init(void)
         us_gap = 4 * 1e6 / baudrate;
     }
     currentServo = servo[activeServo % AP_HIWONDER_SERVO_NUM];
-
-
-    const SRV_Channel::Aux_servo_function_t fn = (SRV_Channel::Aux_servo_function_t)((uint8_t)SRV_Channel::k_none);
-    servoMask |= SRV_Channels::get_output_channel_mask(fn);
 
 }
 
@@ -273,21 +269,15 @@ void AP_HiwonderServo::update()
     currentServo = servo[activeServo % AP_HIWONDER_SERVO_NUM];
 
 
-    uint8_t hiwonderServoCounter = 0;
     // loop for all 16 channels
-    for (uint8_t i=0; i<AP_HIWONDER_SERVO_NUM; i++) {
-        SRV_Channel *c = SRV_Channels::srv_channel(i);
-        if (c == nullptr) {
-            continue;
-        }
-        const uint16_t pwm = c->get_output_pwm();
-        if (lastPWM[hiwonderServoCounter] == pwm) continue;
-        lastPWM[hiwonderServoCounter] = pwm;
-        servo[hiwonderServoCounter]->set_output_pwm(lastPWM[hiwonderServoCounter]);
-        if (hiwonderServoCounter < NUM_SERVO_CHANNELS) hiwonderServoCounter++;
-        else break;
-    }
+    SRV_Channels::set_angle(static_cast<SRV_Channel::Aux_servo_function_t>(srv1Func.get()), 120);
+    SRV_Channels::set_angle(static_cast<SRV_Channel::Aux_servo_function_t>(srv2Func.get()), 120);
 
+    uint16_t pwm;
+    if (SRV_Channels::get_output_pwm(static_cast<SRV_Channel::Aux_servo_function_t>(srv1Func.get()), pwm))
+        servo[0]->set_output_pwm(pwm);
+    if (SRV_Channels::get_output_pwm(static_cast<SRV_Channel::Aux_servo_function_t>(srv2Func.get()), pwm))
+        servo[1]->set_output_pwm(pwm);
 }
 
 namespace AP {

@@ -78,16 +78,14 @@ private:
     
     uint8_t crc = 0;
     // servo position limits
-    AP_Int32 pos_min;
-    AP_Int32 pos_max;
-    AP_Int8  srv1ID;
-    AP_Int8  srv2ID;
+    AP_Int8  srv1Func;
+    AP_Int8  srv2Func;
+    AP_Int8  srv1Id;
+    AP_Int8  srv2Id;
     uint32_t last_send_us;
     uint64_t timeout;
     uint8_t readTries = 0;
     bool waitForReply = false;
-    uint32_t servoMask = 0;
-    uint16_t lastPWM[AP_HIWONDER_SERVO_NUM];
 };
 
 namespace AP {
