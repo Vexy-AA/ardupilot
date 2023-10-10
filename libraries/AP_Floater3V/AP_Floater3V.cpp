@@ -41,7 +41,7 @@ const AP_Param::GroupInfo AP_Floater3V::var_info[] = {
     // @Description: This selects which barometer will be measuring internal pressure
     // @Values: 0:First,1:2nd,2:3rd
     // @User: Advanced
-    AP_GROUPINFO("_FLT_ID", 1, AP_Floater3V, instance, 0),
+    AP_GROUPINFO("_CAN_ID", 1, AP_Floater3V, instance, 0),
 
     
     // @Param: _SNS_PIN
@@ -49,42 +49,42 @@ const AP_Param::GroupInfo AP_Floater3V::var_info[] = {
     // @Description: This selects pin which measures signal
     // @Values: 0:gpio0,1:gpio1,2:gpio2
     // @User: Advanced
-    AP_GROUPINFO("_SRV1", 2, AP_Floater3V, srv1Channel, 0),
+    AP_GROUPINFO("_SRV1", 2, AP_Floater3V, srv1Func, 0),
 
     // @Param: _SNS_PIN
     // @DisplayName: Level sensor pin
     // @Description: This selects pin which measures signal
     // @Values: 0:gpio0,1:gpio1,2:gpio2
     // @User: Advanced
-    AP_GROUPINFO("_SRV2", 3, AP_Floater3V, srv2Channel, 1),
+    AP_GROUPINFO("_SRV2", 3, AP_Floater3V, srv2Func, 1),
 
     // @Param: _INT
     // @DisplayName: Internal pressure sensor instance
     // @Description: This selects which barometer will be measuring internal pressure
     // @Values: 0:FirstBaro,1:2ndBaro,2:3rdBaro
     // @User: Advanced
-    AP_GROUPINFO("_INT", 4, AP_Floater3V, baro_internal, 0),
+    AP_GROUPINFO("_INTBAR", 4, AP_Floater3V, baro_internal, 0),
 
     // @Param: _EXT
     // @DisplayName: External pressure sensor instance
     // @Description: This selects which barometer will be measuring external pressure
     // @Values: 0:FirstBaro,1:2ndBaro,2:3rdBaro
     // @User: Advanced
-    AP_GROUPINFO("_EXT", 5, AP_Floater3V, baro_external, 1),
+    AP_GROUPINFO("_EXTBAR", 5, AP_Floater3V, baro_external, 1),
 
     // @Param: _VDS_PIN
     // @DisplayName: VSD pin
     // @Description: This selects pin which controls VDS
     // @Values: 0:gpio0,1:gpio1,2:gpio2
     // @User: Advanced
-    AP_GROUPINFO("_VDS_PIN", 6, AP_Floater3V, vds_pin, -1),
+    AP_GROUPINFO("_VDSPIN", 6, AP_Floater3V, vds_pin, -1),
 
     // @Param: _SNS_PIN
     // @DisplayName: Level sensor pin
     // @Description: This selects pin which measures signal
     // @Values: 0:gpio0,1:gpio1,2:gpio2
     // @User: Advanced
-    AP_GROUPINFO("_SNS_PIN", 7, AP_Floater3V, level_sensor_pin, -1),
+    AP_GROUPINFO("_SNSPIN", 7, AP_Floater3V, level_sensor_pin, -1),
 
     AP_GROUPEND
 };
@@ -101,9 +101,9 @@ HAL_Semaphore AP_Floater3V::_sem_registry;
 
 
 
-Valve::Valve(valve_type_t _type, uint8_t _instance) :
+Valve::Valve(valve_type_t _type, SRV_Channel::Aux_servo_function_t _function) :
 type(_type),
-instance(_instance){
+function(_function){
 }
 void Valve::open(uint32_t now, uint32_t time){
     closeTime = now + time;
@@ -111,31 +111,52 @@ void Valve::open(uint32_t now, uint32_t time){
 }
 void Valve::open(){
     if (type == valve_type_t::HIWONDER){
-        SRV_Channels::set_output_pwm_chan(instance, 2000);
+        SRV_Channels::set_output_scaled(function,120);
     }
     if (type == valve_type_t::ANALOG){
-        hal.gpio->pinMode(instance, HAL_GPIO_OUTPUT);
-        hal.gpio->write(instance, 1);
+        uint8_t pinNumber = static_cast<uint8_t>(function);
+        hal.gpio->pinMode(pinNumber, HAL_GPIO_OUTPUT);
+        hal.gpio->write(pinNumber, 1);
     }
 }
 
 void Valve::close(){
     if (type == valve_type_t::HIWONDER){
-        SRV_Channels::set_output_pwm_chan(instance, 1000);
+        SRV_Channels::set_output_scaled(function,0);
     }
     if (type == valve_type_t::ANALOG){
-        hal.gpio->pinMode(instance, HAL_GPIO_OUTPUT);
-        hal.gpio->write(instance, 0);
+        uint8_t pinNumber = static_cast<uint8_t>(function);
+        hal.gpio->pinMode(pinNumber, HAL_GPIO_OUTPUT);
+        hal.gpio->write(pinNumber, 0);
     }
 }
 
 void Valve::update(uint32_t now){
-    if (now > closeTime)
-        close();
+    /* if (now > closeTime && closeTime > 0)
+        close(); */
 }
 
+void Valve::updateFunction(SRV_Channel::Aux_servo_function_t _function){
+    if (function != _function)
+        function = _function;
+}
+void AP_Floater3V::increaseLevel(){
+    valves[BOTTOM]->open();
+    valves[TOP]->open();
+    valves[AIR]->close();
+}
 
+void AP_Floater3V::closeAll(){
+    valves[BOTTOM]->close();
+    valves[TOP]->close();
+    valves[AIR]->close();
+}
 
+void AP_Floater3V::decreaseLevel(){
+    valves[TOP]->close();
+    valves[BOTTOM]->open();
+    valves[AIR]->open();
+}
 
 /*
   AP_Floater3V constructor
@@ -149,14 +170,18 @@ AP_Floater3V::AP_Floater3V()
 
 bool AP_Floater3V::detectLevelSensor()
 {
-    if (level_sensor_pin != -1){
-        floaterSensor = hal.analogin->channel(level_sensor_pin);
-        if (floaterSensor == nullptr){
-            return false;
-        }
-        return true;
+    if (floaterSensor == nullptr){
+        floaterSensor = hal.analogin->channel(current_pin);
     }
-    return false;
+    if (floaterSensor == nullptr){
+        return false;
+    }
+    if (current_pin != level_sensor_pin && level_sensor_pin != -1){
+        if (floaterSensor->set_pin(level_sensor_pin))
+            current_pin = level_sensor_pin;
+
+    }
+    return true;
 }
 
 
@@ -164,7 +189,7 @@ bool AP_Floater3V::detectLevelSensor()
 void AP_Floater3V::updateLevelReading()
 {
     if (detectLevelSensor()){
-        levelReading = floaterSensor->voltage_average();
+        levelReading = floaterSensor->voltage_average() *1000;
     }
 }
 /*
@@ -172,9 +197,10 @@ void AP_Floater3V::updateLevelReading()
  */
 void AP_Floater3V::init(void)
 {
-    valves[TOP] = new Valve(valve_type_t::HIWONDER, srv1Channel);
-    valves[BOTTOM] = new Valve(valve_type_t::HIWONDER, srv1Channel);
-    valves[AIR] = new Valve(valve_type_t::ANALOG, vds_pin);
+    valves[TOP] = new Valve(valve_type_t::HIWONDER, srv1Func);
+    valves[BOTTOM] = new Valve(valve_type_t::HIWONDER, srv2Func);
+    valves[AIR] = new Valve(valve_type_t::ANALOG, static_cast<SRV_Channel::Aux_servo_function_t>(vds_pin.get()));
+    floaterSensor = hal.analogin->channel(current_pin);
 }
 
 
@@ -192,6 +218,20 @@ void AP_Floater3V::update(void)
     
     uint32_t now = AP_HAL::millis();
     updateLevelReading();
+
+    valves[TOP]->updateFunction(srv1Func);
+    valves[BOTTOM]->updateFunction(srv2Func);
+    valves[AIR]->updateFunction(static_cast<SRV_Channel::Aux_servo_function_t>(vds_pin.get()));
+
+    if (levelReading < 1500 && levelReading > 1000){
+        increaseLevel();
+    }
+    if (levelReading >1700 && levelReading < 1900){
+        closeAll();
+    }
+    if (levelReading > 2100){
+        decreaseLevel();
+    }
 
     for (uint8_t i = 0; i < VALVE_NUMBER; i++)
     {

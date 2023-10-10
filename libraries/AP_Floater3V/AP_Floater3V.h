@@ -36,16 +36,17 @@ class Valve
 {
     
 public:
-    Valve(valve_type_t _type, uint8_t _instance);
+    Valve(valve_type_t _type, SRV_Channel::Aux_servo_function_t _function);
     void open(uint32_t now, uint32_t time);
     void open();
 
     void close();
 
     void update(uint32_t now);
+    void updateFunction(SRV_Channel::Aux_servo_function_t _function);
     uint32_t closeTime;
     valve_type_t type;
-    uint8_t instance;
+    SRV_Channel::Aux_servo_function_t function;
 
     
 private:
@@ -88,20 +89,23 @@ private:
     bool detectLevelSensor();
     void updateLevelReading();
 
-
-
+    void increaseLevel();
+    void decreaseLevel();
+    void closeAll();
+    
     Valve* valves[VALVE_NUMBER] = {nullptr};
     
     bool valveSet(uint8_t ch, uint8_t enable);
     
     AP_HAL::AnalogSource *floaterSensor = nullptr;
     AP_Int8                             instance;
-    AP_Int8                             srv1Channel;
-    AP_Int8                             srv2Channel;
+    AP_Enum16<SRV_Channel::Aux_servo_function_t>     srv1Func;
+    AP_Enum16<SRV_Channel::Aux_servo_function_t>     srv2Func;
     AP_Int8                             baro_internal;
     AP_Int8                             baro_external;
     AP_Int8                             vds_pin;
     AP_Int8                             level_sensor_pin;
+    uint8_t                             current_pin = 0;
     bool initialised = false;
      // semaphore for API access from threads
     HAL_Semaphore                      _rsem;
